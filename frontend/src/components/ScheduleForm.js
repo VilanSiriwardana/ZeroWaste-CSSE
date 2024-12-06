@@ -1,6 +1,15 @@
 import React, { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import CenterSelection from "../components/ScheduleForm/CenterSelection";
+import CollectorSelection from "../components/ScheduleForm/CollectorSelection";
+import VehicleSelection from "../components/ScheduleForm/VehicleSelection";
+import DateSelection from "../components/ScheduleForm/DateSelection";
+import TimeSelection from "../components/ScheduleForm/TimeSelection";
+import RequestList from "../components/ScheduleForm/RequestList";
+import { FaCheckCircle } from "react-icons/fa"; // Importing a success icon
+import successImage from "../components/assets/success.jpg"; // Example image for success
+
 
 const ScheduleForm = () => {
   const [collectors, setCollectors] = useState([]);
@@ -15,6 +24,10 @@ const ScheduleForm = () => {
     time: "",
     selectedRequests: [], // Store selected requests
   });
+  const [selectedCenter, setSelectedCenter] = useState(null); // Added center state
+  const [selectedCollector, setSelectedCollector] = useState(null); // Added collector state
+  const [selectedVehicle, setSelectedVehicle] = useState(null); // Added vehicle state
+
   const [filteredRequests, setFilteredRequests] = useState([]); // State for filtered requests
   const [error, setError] = useState(null);
   const [showSuccessPopup, setShowSuccessPopup] = useState(false);
@@ -30,7 +43,6 @@ const ScheduleForm = () => {
         setCollectors(collectorsRes.data);
       } catch (err) {
         setError("Failed to fetch collectors.");
-        console.error("Error fetching collectors:", err);
       }
     };
     fetchCollectors();
@@ -44,7 +56,6 @@ const ScheduleForm = () => {
         setCenters(centersRes.data);
       } catch (err) {
         setError("Failed to fetch centers.");
-        console.error("Error fetching centers:", err);
       }
     };
     fetchCenters();
@@ -52,53 +63,50 @@ const ScheduleForm = () => {
 
   // Fetch vehicles based on selected center
   useEffect(() => {
-    const fetchVehicles = async () => {
-      if (formData.centerId) {
+    if (selectedCenter) {
+      const fetchVehicles = async () => {
         try {
           const vehiclesRes = await axios.get(
-            `http://localhost:3050/api/vehicles/getVehicles/${formData.centerId}`
+            `http://localhost:3050/api/vehicles/getVehicles/${selectedCenter}`
           );
           setVehicles(vehiclesRes.data);
         } catch (err) {
           setError("Failed to fetch vehicles.");
-          console.error("Error fetching vehicles:", err);
         }
-      }
-    };
-    fetchVehicles();
-  }, [formData.centerId]);
+      };
+      fetchVehicles();
+    }
+  }, [selectedCenter]);
 
-  // Fetch all pending requests for the selected center
+  // Fetch pending requests
   useEffect(() => {
-    const fetchPendingRequests = async () => {
-      if (formData.centerId) {
+    if (selectedCenter) {
+      const fetchPendingRequests = async () => {
         try {
           const response = await axios.get(
-            `http://localhost:3050/api/requests/byCenter/${formData.centerId}`
+            `http://localhost:3050/api/requests/byCenter/${selectedCenter}`
           );
-          console.log(response.data)
-          setPendingRequests(response.data); // Store all pending requests for the center
+          setPendingRequests(response.data);
+          console.log(response.data);
         } catch (err) {
           setError("Failed to fetch pending requests.");
-          console.error("Error fetching pending requests:", err);
         }
-      }
-    };
-    fetchPendingRequests();
-  }, [formData.centerId]);
+      };
+      fetchPendingRequests();
+    }
+  }, [selectedCenter]);
 
-  // Filter requests based on the selected date
+  // Filter requests based on selected date
   useEffect(() => {
     if (formData.date && pendingRequests.length > 0) {
-      const selectedDate = new Date(formData.date).toISOString().split("T")[0]; // Format the date to 'YYYY-MM-DD'
+      const selectedDate = new Date(formData.date).toISOString().split("T")[0];
       const filtered = pendingRequests.filter((request) => {
         const requestDate = new Date(request.collectionDate)
           .toISOString()
-          .split("T")[0]; // Format request date to 'YYYY-MM-DD'
-        return requestDate === selectedDate; // Compare only the date part (ignoring time)
+          .split("T")[0];
+        return requestDate === selectedDate;
       });
-      console.log(filtered)
-      setFilteredRequests(filtered); // Set the filtered requests
+      setFilteredRequests(filtered);
     }
   }, [formData.date, pendingRequests]);
 
@@ -119,151 +127,60 @@ const ScheduleForm = () => {
     }
   };
 
+  // Handle form submission
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
-      await axios.post("http://localhost:3050/api/schedule/create", formData);
+      await axios.post("http://localhost:3050/api/schedule/create", {
+        ...formData,
+        centerId: selectedCenter,
+        collectorId: selectedCollector,
+        vehicleId: selectedVehicle,
+      });
       setShowSuccessPopup(true);
     } catch (error) {
       setError("Failed to create schedule.");
-      console.error("Error creating schedule:", error);
     }
   };
 
-  const handlePopupClose = () => {
-    setShowSuccessPopup(false);
-    navigate("/schedulePage");
-  };
-
   return (
-    <div className="max-w-3xl mx-auto bg-white shadow-lg rounded-lg p-8">
+    <div className="max-w-6xl mx-auto bg-white shadow-lg rounded-lg p-8">
       <h2 className="text-4xl font-bold mb-6 text-green-600 text-center">
         Create Schedule
       </h2>
-
       {error && <div className="text-red-500 mb-4">{error}</div>}
 
-      {/* Center Selection */}
-      <div className="mb-6">
-        <label className="block mb-2 text-xl font-semibold text-gray-700">
-          Select Collection Center
-        </label>
-        <select
-          className="w-full p-4 border border-gray-300 rounded-lg focus:ring-4 focus:ring-green-500"
-          onChange={(e) =>
-            setFormData({ ...formData, centerId: e.target.value })
-          }
-        >
-          <option>Select Center</option>
-          {centers.map((center) => (
-            <option key={center._id} value={center._id}>
-              {center.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <CenterSelection
+        centers={centers}
+        selectedCenter={selectedCenter}
+        setSelectedCenter={setSelectedCenter} // Pass the function
+      />
 
-      {/* Collector Selection */}
-      <div className="mb-6">
-        <label className="block mb-2 text-xl font-semibold text-gray-700">
-          Select Garbage Collector
-        </label>
-        <select
-          className="w-full p-4 border border-gray-300 rounded-lg focus:ring-4 focus:ring-green-500"
-          onChange={(e) =>
-            setFormData({ ...formData, collectorId: e.target.value })
-          }
-        >
-          <option>Select Collector</option>
-          {collectors.map((collector) => (
-            <option key={collector._id} value={collector._id}>
-              {collector.name}
-            </option>
-          ))}
-        </select>
-      </div>
+      <DateSelection
+        onChange={(e) => setFormData({ ...formData, date: e.target.value })}
+      />
 
-      {/* Vehicle Selection */}
-      <div className="mb-6">
-        <label className="block mb-2 text-xl font-semibold text-gray-700">
-          Select Vehicle
-        </label>
-        <select
-          className="w-full p-4 border border-gray-300 rounded-lg focus:ring-4 focus:ring-green-500"
-          onChange={(e) =>
-            setFormData({ ...formData, vehicleId: e.target.value })
-          }
-        >
-          <option>Select Vehicle</option>
-          {vehicles.map((vehicle) => (
-            <option key={vehicle._id} value={vehicle._id}>
-              {vehicle.name} ({vehicle.licensePlate})
-            </option>
-          ))}
-        </select>
-      </div>
+      <RequestList
+        filteredRequests={filteredRequests}
+        handleRequestSelection={handleRequestSelection}
+      />
 
-      {/* Date Selection */}
-      <div className="mb-6">
-        <label className="block mb-2 text-xl font-semibold text-gray-700">
-          Date
-        </label>
-        <input
-          type="date"
-          className="w-full p-4 border border-gray-300 rounded-lg focus:ring-4 focus:ring-green-500"
-          onChange={(e) => setFormData({ ...formData, date: e.target.value })}
-        />
-      </div>
+      <CollectorSelection
+        collectors={collectors}
+        selectedCollector={selectedCollector}
+        setSelectedCollector={setSelectedCollector} // Pass the function
+      />
 
-      {/* Time Selection */}
-      <div className="mb-6">
-        <label className="block mb-2 text-xl font-semibold text-gray-700">
-          Time
-        </label>
-        <input
-          type="time"
-          className="w-full p-4 border border-gray-300 rounded-lg focus:ring-4 focus:ring-green-500"
-          onChange={(e) => setFormData({ ...formData, time: e.target.value })}
-        />
-      </div>
+      <VehicleSelection
+        vehicles={vehicles}
+        selectedVehicle={selectedVehicle}
+        setSelectedVehicle={setSelectedVehicle} // Pass the function
+      />
 
-      {/* Display Filtered Requests with Checkboxes */}
-      {filteredRequests.length > 0 && (
-        <div className="mt-6">
-          <h3 className="text-2xl font-bold text-gray-800">
-            Filtered Pending Waste Requests
-          </h3>
-          <div className="grid grid-cols-1 gap-6 mt-4">
-            {filteredRequests.map((request) => (
-              <div
-                key={request._id}
-                className="bg-gray-100 p-4 rounded-lg shadow-md flex items-center justify-between"
-              >
-                <div>
-                  <p>
-                    <strong>Resident:</strong> {request.resident.residentName}
-                  </p>
-                  <p>
-                    <strong>Waste Type:</strong> {request.wasteType}
-                  </p>
-                  <p>
-                    <strong>Quantity:</strong> {request.quantity}
-                  </p>
-                  <p>
-                    <strong>Collection Time:</strong> {request.collectionTime}
-                  </p>
-                </div>
-                <input
-                  type="checkbox"
-                  onChange={(e) => handleRequestSelection(e, request._id)}
-                />
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+      <TimeSelection
+        onChange={(e) => setFormData({ ...formData, time: e.target.value })}
+      />
 
-      {/* Submit Button */}
       <button
         type="submit"
         onClick={handleSubmit}
@@ -272,22 +189,42 @@ const ScheduleForm = () => {
         Create Schedule
       </button>
 
-      {/* Success Popup */}
-      {showSuccessPopup && (
-        <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
-          <div className="bg-white p-8 rounded-lg shadow-lg text-center">
-            <h3 className="text-2xl font-bold mb-4 text-green-600">
-              Schedule Created Successfully!
-            </h3>
-            <button
-              onClick={handlePopupClose}
-              className="bg-green-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all duration-300 ease-in-out font-bold"
-            >
-              OK
-            </button>
-          </div>
-        </div>
-      )}
+
+{showSuccessPopup && (
+  <div className="fixed inset-0 flex items-center justify-center bg-black bg-opacity-50">
+    <div className="bg-white p-8 rounded-lg shadow-xl max-w-md mx-auto text-center relative transition-transform transform hover:scale-105">
+      {/* Image Section */}
+      <img
+        src={successImage} // Example image, replace with your own success image if needed
+        alt="Success"
+        className="w-24 h-24 mx-auto rounded-full border-4 border-green-600 mb-4"
+      />
+
+      {/* Success Icon */}
+      <FaCheckCircle className="text-green-600 text-5xl mx-auto mb-4" />
+
+      {/* Success Message */}
+      <h3 className="text-3xl font-bold text-green-600 mb-4">
+        Schedule Created Successfully!
+      </h3>
+      <p className="text-gray-700 mb-6">
+        Your new schedule has been successfully created. You can now view it in the schedule page.
+      </p>
+
+      {/* OK Button */}
+      <button
+        onClick={() => navigate("/schedulePage")}
+        className="bg-green-600 text-white py-2 px-6 rounded-lg shadow-md hover:bg-green-700 transition-all duration-300 ease-in-out font-bold"
+      >
+        OK
+      </button>
+
+      {/* Decorative Element */}
+      <div className="absolute -top-8 -right-8 bg-green-600 w-16 h-16 rounded-full shadow-lg opacity-20"></div>
+    </div>
+  </div>
+)}
+
     </div>
   );
 };
